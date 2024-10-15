@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { View, TextInput, Button, Text, Alert, Modal, StyleSheet } from 'react-native';
 import { ColorPicker } from 'react-native-color-picker';
 import { authentication, db } from "../config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import Slider from '@react-native-community/slider';
+import AuthContext from "../AuthContext"
 
 
 const Register = ({ navigation }) => {
@@ -13,17 +14,19 @@ const Register = ({ navigation }) => {
   const [name, setName] = useState('');
   const [profileColor, setProfileColor] = useState('#ffffff'); // Default color
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const {setRegistering} =  useContext(AuthContext);
 
   const openColorPicker = () => setIsPickerVisible(true);
   const closeColorPicker = () => setIsPickerVisible(false);
   const handleRegister = async () => {
+    setRegistering(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(authentication,email, password);
 
       const user = userCredential.user;
       await setDoc(doc(db, "Users", user.uid), {
         name,
-        color,
+        color:profileColor,
         email,
       });
       Alert.alert('Registration successful', 'You can now login');

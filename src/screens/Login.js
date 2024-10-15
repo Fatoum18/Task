@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState,useContext } from 'react';
 import { View, TextInput, Button, Text, Alert } from 'react-native';
 import { authentication } from "../config";
 import { signInWithEmailAndPassword } from "firebase/auth";
-
+import AuthContext from "../AuthContext"
 const Login = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
+  const {setRegistering} =  useContext(AuthContext);
   const handleLogin = async () => {
+    setRegistering(false);
     try {
       await signInWithEmailAndPassword(authentication, email, password);
       navigation.navigate('Home');  // Redirect to Home after successful login

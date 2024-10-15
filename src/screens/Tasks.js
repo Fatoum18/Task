@@ -3,7 +3,7 @@ import React, { useEffect, useState, useContext } from "react";
 import { View, Text, FlatList, TouchableOpacity } from "react-native";
 import { db } from "../config";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
-import {AuthContext} from "../../App";
+import AuthContext from "../AuthContext";
 
 export default function TasksScreen({ navigation }) {
   const { user } = useContext(AuthContext);

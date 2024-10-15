@@ -7,25 +7,19 @@ import LoginScreen from './src/screens/Login';
 import RegisterScreen from './src/screens/Register';
 import TasksScreen from './src/screens/Tasks';
 import HomeScreen from './src/screens/Home';
-import Icon from 'react-native-vector-icons/Ionicons';
+import ProfileScreen from './src/screens/Profile';
+import LoadingScreen from './src/screens/Loading';
+import TaskDetailScreen from './src/screens/TaskDetail';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { onAuthStateChanged } from "firebase/auth";
-
-export const AuthContext = createContext();
-
+import AuthContext, { AuthProvider } from "./src/AuthContext";
+ 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 
-function AuthStack() {
-  return (
-    <Stack.Navigator>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-    </Stack.Navigator>
-  );
-}
 
- 
 function HomeTabs() {
   return (
     <Tab.Navigator
@@ -34,13 +28,15 @@ function HomeTabs() {
           let iconName;
 
           if (route.name === 'Home') {
-            iconName = 'home-outline'; // Home icon
+            iconName = 'home-outline';
+            return <Ionicons name={iconName} size={size} color={color} />;
           } else if (route.name === 'Tasks') {
-            iconName = 'checkmark-circle-outline'; // Tasks icon
+            iconName = 'checkmark-circle-outline';
+            return <Ionicons name={iconName} size={size} color={color} />;
+          } else if (route.name === 'Profile') {
+            iconName = 'user';
+            return <FontAwesome name={iconName} size={size} color={color} />;
           }
-
-          // Return the icon component
-          return <Icon name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: 'tomato',
         tabBarInactiveTintColor: 'gray',
@@ -48,6 +44,7 @@ function HomeTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Tasks" component={TasksScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -64,11 +61,39 @@ export default function App() {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
+    <AuthProvider>
       <NavigationContainer>
-        {user ? <HomeTabs /> : <AuthStack />}
+        <AuthContext.Consumer>
+        {({user, loading}) => (
+
+          loading ? (
+            <LoadingScreen/>
+          ) : (
+            <Stack.Navigator>
+            {/* If user is connect , then display HomeTabs otherwise AuthStack */}
+            {
+              user ?
+                <React.Fragment>
+                  <Stack.Screen name="HomeTasks" component={HomeTabs} options={{ headerShown: false }} />
+                  <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
+                </React.Fragment>
+  
+                :
+                <>
+                  <Stack.Screen name="Login" component={LoginScreen} />
+                  <Stack.Screen name="Register" component={RegisterScreen} />
+                </>
+  
+            }
+          </Stack.Navigator>
+          )
+        )}
+
+        </AuthContext.Consumer>
+
+
       </NavigationContainer>
-    </AuthContext.Provider>
+    </AuthProvider>
   );
 }
 
