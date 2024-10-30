@@ -1,60 +1,64 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, StyleSheet, Modal, TextInput, Button } from 'react-native';
 import { db } from '../config';
+import { dailyTasks } from '../task-db';
 import { collection, doc, setDoc, getDocs, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import AuthContext from '../AuthContext';
 
-// Hardcoded daily tasks
-const dailyTasks = [
-  { id: '1', task: 'Clean classroom 2106' },
-  { id: '2', task: 'Clean classroom 2503' },
-  { id: '3', task: 'Refill paper in teachers’ room printer' },
-  { id: '4', task: 'Empty trash can in room 2103' },
-];
+
 
 export default function HomePage() {
-  const { user } = useContext(AuthContext); // Get user info from AuthContext
-  const [availableDailyTasks, setAvailableDailyTasks] = useState([]); // Daily tasks that are not yet completed today
-  const [oneTimeTasks, setOneTimeTasks] = useState([]); // One-time tasks created by the user
-  const [modalVisible, setModalVisible] = useState(false); // Modal visibility state
-  const [newTaskName, setNewTaskName] = useState(''); // Input state for new task name
+  const { user } = useContext(AuthContext);
+  const [availableDailyTasks, setAvailableDailyTasks] = useState([]);
+  const [oneTimeTasks, setOneTimeTasks] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newTaskName, setNewTaskName] = useState('');
 
   useEffect(() => {
-    // Fetch available daily tasks (those not completed today)
     const fetchDailyTasks = async () => {
-      const today = new Date();
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0)); // Start of today
-      const q = query(collection(db, 'dailyTasks'), where('completedAt', '>=', Timestamp.fromDate(startOfDay)));
-
-      const completedTasksSnapshot = await getDocs(q);
-      const completedTaskIds = completedTasksSnapshot.docs.map(doc => doc.id);
-
-      const filteredTasks = dailyTasks.filter(task => !completedTaskIds.includes(task.id));
-      setAvailableDailyTasks(filteredTasks); // Show tasks that are not yet completed today
+      const today = new Date().toISOString().split('T')[0]; // Format 'yyyy-MM-dd'
+      try {
+        const tasks = [];
+        for (const task of dailyTasks) {
+          const completionsQuery = query(
+            collection(db, `dailyTasks/${today}/completions`),
+            where('taskId', '==', task.id)
+          );
+          const completionsSnapshot = await getDocs(completionsQuery);
+          if (completionsSnapshot.empty) {
+            tasks.push(task); // Only include tasks not completed today
+          }
+        }
+        setAvailableDailyTasks(tasks);
+      } catch (error) {
+        console.error("Error fetching available tasks: ", error);
+        setAvailableDailyTasks([]);
+      }
     };
 
-    // Fetch one-time tasks specific to the user
     const fetchOneTimeTasks = async () => {
-      const q = query(collection(db, `users/${user.uid}/oneTimeTasks`), where('completed', '==', false));
+      const q = query(collection(db, `Users/${user.uid}/oneTimeTasks`), where('completed', '==', false));
       const oneTimeTasksSnapshot = await getDocs(q);
       const tasks = oneTimeTasksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOneTimeTasks(tasks); // Set one-time tasks for the user
+      setOneTimeTasks(tasks);
     };
 
     fetchDailyTasks();
     fetchOneTimeTasks();
   }, [user]);
 
-  // Mark a daily task as completed
   const handleCompleteDailyTask = async (taskId) => {
     try {
-      const taskRef = doc(db, 'dailyTasks', taskId);
-      await setDoc(taskRef, {
-        completedBy: user.uid,
+      const today = new Date().toISOString().split('T')[0];
+      const completionId = `${user.uid}-${taskId}`;
+      const completionRef = doc(collection(db, `dailyTasks/${today}/completions`), completionId);
+
+      await setDoc(completionRef, {
+        taskId,
+        userId: user.uid,
         completedAt: Timestamp.now(),
       });
 
-      // Remove task from the list of available daily tasks
       setAvailableDailyTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
       Alert.alert('Task Completed', 'The daily task has been completed.');
     } catch (error) {
@@ -62,15 +66,13 @@ export default function HomePage() {
     }
   };
 
-  // Mark a one-time task as completed (only if the current user created it)
   const handleCompleteOneTimeTask = async (taskId) => {
     try {
-      const taskRef = doc(db, `users/${user.uid}/oneTimeTasks`, taskId);
+      const taskRef = doc(db, `Users/${user.uid}/oneTimeTasks`, taskId);
       await updateDoc(taskRef, {
         completed: true,
       });
 
-      // Remove task from the list of one-time tasks
       setOneTimeTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
       Alert.alert('Task Completed', 'The one-time task has been completed.');
     } catch (error) {
@@ -78,7 +80,6 @@ export default function HomePage() {
     }
   };
 
-  // Add one-time task to Firestore
   const handleAddOneTimeTask = async () => {
     if (!newTaskName.trim()) {
       Alert.alert('Error', 'Task name cannot be empty');
@@ -86,18 +87,17 @@ export default function HomePage() {
     }
 
     try {
-      const taskRef = doc(collection(db, `users/${user.uid}/oneTimeTasks`));
+      const taskRef = doc(collection(db, `Users/${user.uid}/oneTimeTasks`));
       await setDoc(taskRef, {
         task: newTaskName,
         createdAt: Timestamp.now(),
-        completed: false, // Mark as not completed initially
-        createdBy: user.uid, // Store who created the task
+        completed: false,
+        createdBy: user.uid,
       });
 
-      // Update one-time tasks locally
       setOneTimeTasks(prevTasks => [...prevTasks, { id: taskRef.id, task: newTaskName, completed: false }]);
-      setNewTaskName(''); // Clear the input
-      setModalVisible(false); // Close the modal
+      setNewTaskName('');
+      setModalVisible(false);
       Alert.alert('Task Added', 'The one-time task has been added.');
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -110,7 +110,7 @@ export default function HomePage() {
       onPress={() =>
         isDaily
           ? handleCompleteDailyTask(item.id)
-          : handleCompleteOneTimeTask(item.id) // Allow completion only for one-time tasks created by the user
+          : handleCompleteOneTimeTask(item.id)
       }
     >
       <Text>{item.task}</Text>
@@ -137,7 +137,6 @@ export default function HomePage() {
         <Text style={styles.addButtonText}>Add One-Time Task</Text>
       </TouchableOpacity>
 
-      {/* Modal for adding a new one-time task */}
       <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
